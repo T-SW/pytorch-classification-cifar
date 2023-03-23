@@ -34,29 +34,50 @@ class MyDataset(Dataset):
         return len(self.data_list)
 
 
-data_path = r"./data"
+class Data_enhancement():
+    """
+    transforms数据增强整理：  https://zhuanlan.zhihu.com/p/166130922
+    """
+    def __init__(self, mean, std, img_size):
+        self.mean = mean
+        self.std = std
+        self.img_size = img_size
+
+    def cifar(self):
+        transform_train = transforms.Compose([
+            # transforms.ToPILImage(),
+            # transforms.RandomErasing(scale=(0.04, 0.2), ratio=(0.5, 2)),  # 随机遮挡
+            # transforms.RandomRotation(15),
+            transforms.RandomCrop(30),                           # 随机中心裁剪
+            transforms.RandomHorizontalFlip(),                              # 随机水平镜像
+            transforms.ToTensor(),
+            transforms.Normalize(self.mean, self.std)
+        ])
+        return transform_train
+
+    def General(self):
+        transform_train = transforms.Compose([
+            transforms.Resize((self.img_size, self.img_size)),
+            transforms.RandomVerticalFlip(p=0.3),                           # 随机垂直镜像
+            transforms.RandomHorizontalFlip(),                              # 随机水平镜像
+            # transforms.RandomErasing(scale=(0.02, 0.04), ratio=(0.5, 2)),   # 随机遮挡
+            transforms.ToTensor(),
+            transforms.Normalize(self.mean, self.std)
+        ])
+        return transform_train
 
 
-def get_train_dataloader(package, data_dir, batch_size, num_workers, shuffle=True, mean=settings.MEAN_10, std=settings.STD_10):
-    if package == 'CIFAR100':
-        mean = settings.MEAN_100
-        std = settings.STD_100
-    transform_train = transforms.Compose([
-        # transforms.ToPILImage(),
-        # transforms.RandomErasing(scale=(0.04, 0.2), ratio=(0.5, 2)),  # 随机遮挡
-        transforms.RandomRotation(15),
-        transforms.RandomCrop(32, padding=4),                           # 随机中心裁剪
-        transforms.RandomHorizontalFlip(),                              # 随机水平镜像
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std)
-    ])
+def get_train_dataloader(package, data_dir, img_size, mean, std, batch_size, num_workers, shuffle=True):
+    if not mean:
+        mean = settings.TRAIN_MEAN
+    if not std:
+        std = settings.TRAIN_STD
+    transform_train = Data_enhancement(mean, std, img_size)
 
-    if package == 'CIFAR10':
-        train_dataset = torchvision.datasets.CIFAR10(root=data_path, train=True, transform=transform_train, download=True)
-    elif package == 'CIFAR100':
-        train_dataset = torchvision.datasets.CIFAR100(root=data_path, train=True, transform=transform_train, download=True)
+    if package:
+        train_dataset = torchvision.datasets.CIFAR10(root=data_dir, train=True, transform=transform_train.cifar(), download=True)
     else:
-        train_dataset = torchvision.datasets.ImageFolder(data_dir, transform=transform_train)
+        train_dataset = torchvision.datasets.ImageFolder(data_dir, transform=transform_train.General())
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,
                               shuffle=shuffle, num_workers=num_workers)
@@ -64,22 +85,21 @@ def get_train_dataloader(package, data_dir, batch_size, num_workers, shuffle=Tru
     return train_loader
 
 
-def get_test_dataloader(data_dir, batch_size, num_workers, package=False, shuffle=True, mean=settings.MEAN_10, std=settings.STD_10):
-    if package == 'CIFAR100':
-        mean = settings.MEAN_100
-        std = settings.STD_100
+def get_test_dataloader(package, data_dir, img_size, mean, std, batch_size, num_workers, shuffle=True):
+    if not mean:
+        mean = settings.TRAIN_MEAN
+    if not std:
+        std = settings.TRAIN_STD
     transform_test = transforms.Compose([
+        transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
 
-    if package == 'CIFAR10':
-        test_dataset = torchvision.datasets.CIFAR10(root=data_path, train=False, transform=transform_test, download=True)
-    elif package == 'CIFAR100':
-        test_dataset = torchvision.datasets.CIFAR100(root=data_path, train=False, transform=transform_test, download=True)
+    if package:
+        test_dataset = torchvision.datasets.CIFAR10(root=data_dir, train=False, transform=transform_test, download=True)
     else:
         test_dataset = torchvision.datasets.ImageFolder(data_dir, transform=transform_test)
-    print(test_dataset.class_to_idx)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size,
                              shuffle=shuffle, num_workers=num_workers)

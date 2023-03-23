@@ -25,7 +25,6 @@ def train(epoch):
 
     train_loss = 0.0
     for batch_index, (images, labels) in train_bar:
-
         if args.device:
             images = images.cuda()
             labels = labels.cuda()
@@ -99,9 +98,6 @@ def eval_training(epoch=0, tb=True):
 
         val_loss += loss.item()
         _, preds = outputs.max(1)
-        print(outputs,111)
-        print(preds,222)
-        print(labels,333)
         correct += preds.eq(labels).sum()
     accuracy = correct / val_num
     val_loss = val_loss / val_num
@@ -120,7 +116,7 @@ def eval_training(epoch=0, tb=True):
         ))
         print()
     else:
-        print('Val set:, Average loss: {:.4f}, Accuracy: {:.4f}'.format(val_loss, accuracy))
+        print('Val set: Average loss: {:.4f}, Accuracy: {:.4f}'.format(val_loss, accuracy))
         val_bar.close()
 
     # add informations to tensorboard
@@ -136,14 +132,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     # Dataset parameters
-    parser.add_argument('--package', action='store_true', default="CIFAR10", help='package dataset(CIFAR10/CIFAR100)')
+    parser.add_argument('--package', action='store_true', default=True, help='dataset is packaged or not')
     parser.add_argument('--data_dir', metavar='DIR', default=r"./data", help='path to dataset')
 
     # Model parameters
-    parser.add_argument('--net', default='resnet18', type=str, help='net type')
+    parser.add_argument('--net', default='resnet50', type=str, help='net type')
+    # parser.add_argument('-net', type=str, required=True, help='net type')     # 指令输入net运行
     parser.add_argument('--num_classes', type=int, default=10, help='number for label classes')
     parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or None')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size for dataloader')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size for dataloader')
     parser.add_argument('--img_size', type=int, default=32)
     parser.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                         help='Override mean pixel value of dataset')
@@ -152,15 +149,15 @@ if __name__ == '__main__':
     parser.add_argument('--resume', default='', type=str, metavar='filename in checkpoint(default: resnet18-last.pth)')
 
     # Learning rate schedule parameters
-    parser.add_argument('--epochs', type=int, default=50, metavar='N', help='number of epochs to train (default: 300)')
-    parser.add_argument('--lr', type=float, default=0.01, help='initial learning rate')
+    parser.add_argument('--epochs', type=int, default=100, metavar='N', help='number of epochs to train (default: 300)')
+    parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate')
     parser.add_argument('--warm', type=int, default=15, help='warm up training phase')
 
     # Optimizer parameters
 
     # Misc
     parser.add_argument('--workers', type=int, default=8, help='max dataloader workers')
-    parser.add_argument('--seed', type=int, default=10, help='random seed (default: 10 or None)')
+    parser.add_argument('--seed', type=int, default=2023, help='random seed (default: 10 or None)')
     parser.add_argument('--batch_log', action='store_true', default=False, help='print training batch log or progress bar')
 
     args = parser.parse_args()
@@ -176,6 +173,7 @@ if __name__ == '__main__':
     train_loader = get_train_dataloader(
         package=args.package,
         data_dir=args.data_dir,
+        img_size=args.img_size,
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
@@ -186,6 +184,7 @@ if __name__ == '__main__':
     val_loader = get_test_dataloader(
         package=args.package,
         data_dir=args.data_dir,
+        img_size=args.img_size,
         mean=data_config['mean'],
         std=data_config['std'],
         num_workers=args.workers,
@@ -203,7 +202,8 @@ if __name__ == '__main__':
     loss_function = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     # learning rate decay
-    train_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=settings.MILESTONES, gamma=0.6)
+    # train_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=settings.MILESTONES, gamma=0.6)
+    train_scheduler = None
     iter_per_epoch = len(train_loader)
     warmup_scheduler = WarmUpLR(optimizer, iter_per_epoch * args.warm)
 
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     writer.add_graph(net, input_tensor)
 
     if args.resume:
-        weights_path = os.path.join(settings.CHECKPOINT_PATH, args.resume)  # args.net
+        weights_path = os.path.join(settings.CHECKPOINT_PATH, args.resume)
         assert os.path.exists(weights_path), "file {} does not exist.".format(weights_path)
         print('loading weights file {} to resume training.....'.format(weights_path))
         checkpoint_model = torch.load(weights_path)
@@ -236,15 +236,15 @@ if __name__ == '__main__':
         resume_epoch = checkpoint_model['epoch']
         print("====>loaded checkpoint (epoch{})".format(resume_epoch))
 
-
     best_acc = 0.0
     for epoch in range(1, args.epochs + 1):
-        if not args.resume:
-            if epoch > args.warm:
-                train_scheduler.step(epoch)     # 学习率调整,在优化器更新后应用
-        else:
-            if epoch > resume_epoch + 1:
-                train_scheduler.step(epoch)
+        if train_scheduler:
+            if not args.resume:
+                if epoch > args.warm:
+                    train_scheduler.step(epoch)     # 学习率调整,在优化器更新后应用
+            else:
+                if epoch > resume_epoch + 1:
+                    train_scheduler.step(epoch)
 
         if args.resume:
             if epoch <= resume_epoch:

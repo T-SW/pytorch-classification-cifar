@@ -14,10 +14,11 @@ tqdm==4.59.0
 
 ## Usage
 ### 1. enter directory
-`$ cd pytorch-cifar100`
+`$ cd pytorch-classification-cifar`
 
 ### 2.dataset
-I use cifar10 and cifar100 dataset from torchvision, and you can create your own dataset too.
+I use cifar10 and cifar100 dataset from torchvision, and you can create your own dataset too.<br>
+Default use cifar10 dataset. If you want to use cifar100 dataset, you just need to change the "cifar10" in ./utils/dataloaders.py to "cifar100".
 
 ### 3. train the model
 You need to adjust the parameters you need. Default use gpu to train resnet50 with cifar10.<br>
